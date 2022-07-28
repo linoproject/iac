@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Example of Lambda + API GW
+
+Parameters:
+  ApiResourceName:
+    Type: String
+    Default: "lambda-api"
+    Description: "Enter API resource name"
+  Env:
+    Type: String
+    Default: "dev"
+    AllowedValues: ["dev","prod"]
+    Description: "Enter Environment"
+
+Resources:
+  MyAPI:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Description: Example HTTP API w Cloudformation
+      Name: !Sub '${ApiResourceName}-${Env}-cf'
+      ProtocolType: HTTP
+      Target: !GetAtt MyLambdaFunction.Arn
+
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs12.x
+      Role: !GetAtt FunctionExecutionRole.Arn
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              const response = {
+                  statusCode: 200,
+                  body: JSON.stringify('Hello from Lambda!'),
+              };
+              return response;
+          };
+  
+  APIInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MyLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${MyAPI}/$default/$default
+  
+  FunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ApiResourceName}-${Env}-role-cf'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+Outputs:
+  InvokeURL:
+    Value: !Sub https://${MyAPI}.execute-api.${AWS::Region}.amazonaws.com
